@@ -1,4 +1,9 @@
 {
-  "version": 2,
-  "cleanUrls": true
+  "buildCommand": null,
+  "outputDirectory": ".",
+  "installCommand": null,
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" }
+  ]
 }
