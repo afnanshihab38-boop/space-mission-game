@@ -1,0 +1,12 @@
+{
+  "name": "cosmodex-space-mission-game",
+  "version": "1.0.0",
+  "description": "3D Interactive Space Mission Design Game - NASA Space Apps Challenge 2026",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["threejs", "space", "game", "nasa-space-apps", "orbital-mechanics"],
+  "author": "Afnan Shihab",
+  "license": "MIT"
+}

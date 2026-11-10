@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>COSMODEX — Space Mission Design</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./lib/three.module.js"
+    }
+  }
+  </script>
+  <style>
+    /* ═══════════════════════════════════════════════════
+       BASE RESET & ROOT VARS
+    ════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #030610;
+      --panel: rgba(4, 14, 36, 0.92);
+      --panel-border: rgba(60, 150, 255, 0.25);
+      --accent: #3c96ff;
+      --accent2: #ff6b35;
+      --warn: #ffcc00;
+      --success: #00e676;
+      --danger: #ff1744;
+      --text: #c8d8ff;
+      --text-dim: #6880aa;
+      --font: 'Courier New', monospace;
+      --ui-radius: 6px;
+      --glow: 0 0 12px rgba(60,150,255,0.5);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* Canvas */
+    #canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       SCREENS LAYER
+    ════════════════════════════════════════════════════ */
+    .screen {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .screen.hidden {
+      display: none !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       TITLE SCREEN
+    ════════════════════════════════════════════════════ */
+    #screen-title {
+      flex-direction: column;
+      gap: 24px;
+      background: radial-gradient(ellipse at center, rgba(10,20,60,0.9) 0%, rgba(3,6,16,0.98) 70%);
+    }
+
+    .title-logo {
+      text-align: center;
+    }
+    .title-logo h1 {
+      font-size: clamp(2.5rem, 7vw, 6rem);
+      letter-spacing: 0.25em;
+      color: #fff;
+      text-shadow: 0 0 40px var(--accent), 0 0 80px rgba(60,150,255,0.3);
+      font-weight: 900;
+    }
+    .title-logo .subtitle {
+      font-size: 1rem;
+      letter-spacing: 0.5em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+    .title-logo .tagline {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-top: 12px;
+      letter-spacing: 0.15em;
+    }
+
+    .title-menu {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 300px;
+    }
+
+    .btn {
+      padding: 14px 32px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 0.9rem;
+      letter-spacing: 0.15em;
+      cursor: pointer;
+      border-radius: var(--ui-radius);
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(60,150,255,0.1), transparent);
+      transform: translateX(-100%);
+      transition: transform 0.4s ease;
+    }
+    .btn:hover::before { transform: translateX(100%); }
+    .btn:hover {
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: var(--glow);
+    }
+    .btn.primary {
+      border-color: var(--accent);
+      background: rgba(60,150,255,0.15);
+      color: #fff;
+    }
+    .btn.danger-btn {
+      border-color: var(--danger);
+      background: rgba(255,23,68,0.1);
+    }
+    .btn.danger-btn:hover {
+      border-color: var(--danger);
+      box-shadow: 0 0 12px rgba(255,23,68,0.5);
+    }
+
+    /* ═══════════════════════════════════════════════════
+       MISSION SELECT SCREEN
+    ════════════════════════════════════════════════════ */
+    #screen-mission {
+      padding: 24px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0;
+      background: rgba(3,6,16,0.95);
+      overflow-y: auto;
+    }
+
+    .mission-header {
+      text-align: center;
+      padding: 24px 0 32px;
+    }
+    .mission-header h2 {
+      font-size: 1.8rem;
+      letter-spacing: 0.3em;
+      color: var(--accent);
+      text-shadow: var(--glow);
+    }
+    .mission-header p {
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      margin-top: 8px;
+    }
+
+    .missions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 0 24px 24px;
+    }
+
+    .mission-card {
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      border-radius: 10px;
+      padding: 24px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .mission-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-4px);
+      box-shadow: var(--glow);
+    }
+    .mission-card.selected {
+      border-color: var(--accent);
+      background: rgba(60,150,255,0.12);
+    }
+    .mission-card .mission-icon {
+      font-size: 3rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .mission-card h3 {
+      font-size: 1rem;
+      letter-spacing: 0.15em;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .mission-card .mission-desc {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .mission-card .difficulty {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .diff-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+    }
+    .diff-dot.active { background: var(--accent2); }
+    .diff-label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-left: 6px;
+    }
+    .mission-reward {
+      font-size: 0.7rem;
+      color: var(--warn);
+      margin-top: 10px;
+    }
+
+    .mission-actions {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      padding: 16px 0 32px;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       SPACECRAFT BUILDER SCREEN
+    ════════════════════════════════════════════════════ */
+    #screen-builder {
+      flex-direction: column;
+      background: rgba(3,6,16,0.98);
+      padding: 0;
+      overflow-y: auto;
+    }
+
+    .builder-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr 320px;
+      gap: 0;
+      height: 100%;
+      max-height: 100vh;
+    }
+
+    .builder-panel {
+      background: var(--panel);
+      border-right: 1px solid var(--panel-border);
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .builder-panel:last-child {
+      border-right: none;
+      border-left: 1px solid var(--panel-border);
+    }
+
+    .builder-preview {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+
+    #spacecraft-canvas {
+      width: 100%;
+      height: 100%;
+      max-height: 500px;
+    }
+
+    .panel-title {
+      font-size: 0.75rem;
+      letter-spacing: 0.25em;
+      color: var(--accent);
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--panel-border);
+      padding-bottom: 10px;
+    }
+
+    .component-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .component-item {
+      border: 1px solid var(--panel-border);
+      border-radius: var(--ui-radius);
+      padding: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .component-item:hover {
+      border-color: var(--accent);
+      background: rgba(60,150,255,0.08);
+    }
+    .component-item.equipped {
+      border-color: var(--success);
+      background: rgba(0,230,118,0.08);
+    }
+    .component-item.incompatible {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .comp-name {
+      font-size: 0.8rem;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .comp-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .stat-pill {
+      font-size: 0.65rem;
+      padding: 2px 8px;
+      border-radius: 20px;
+      border: 1px solid;
+    }
+    .stat-pill.mass { border-color: var(--accent2); color: var(--accent2); }
+    .stat-pill.power { border-color: var(--warn); color: var(--warn); }
+    .stat-pill.science { border-color: var(--success); color: var(--success); }
+    .stat-pill.cost { border-color: var(--text-dim); color: var(--text-dim); }
+
+    /* Budget bars */
+    .budget-display {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .budget-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .budget-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+    }
+    .budget-bar {
+      height: 6px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .budget-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.4s ease;
+    }
+    .budget-fill.mass { background: var(--accent2); }
+    .budget-fill.power { background: var(--warn); }
+    .budget-fill.cost { background: var(--accent); }
+    .budget-fill.science { background: var(--success); }
+    .budget-fill.over { background: var(--danger); }
+
+    /* ═══════════════════════════════════════════════════
+       LAUNCH PHASE SCREEN
+    ════════════════════════════════════════════════════ */
+    #screen-launch {
+      flex-direction: column;
+      background: rgba(3,6,16,0.95);
+      overflow: hidden;
+    }
+
+    .launch-layout {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      height: 100%;
+      width: 100%;
+    }
+
+    .launch-view {
+      position: relative;
+      overflow: hidden;
+    }
+
+    #launch-canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .launch-controls {
+      background: var(--panel);
+      border-left: 1px solid var(--panel-border);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+
+    .orbit-diagram {
+      width: 100%;
+      aspect-ratio: 1;
+      position: relative;
+    }
+
+    #orbit-canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .launch-step {
+      border: 1px solid var(--panel-border);
+      border-radius: var(--ui-radius);
+      padding: 14px;
+      transition: all 0.3s;
+    }
+    .launch-step.active {
+      border-color: var(--accent);
+      background: rgba(60,150,255,0.08);
+    }
+    .launch-step.done {
+      border-color: var(--success);
+      opacity: 0.7;
+    }
+    .step-title {
+      font-size: 0.78rem;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .launch-step.done .step-title { color: var(--success); }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+    }
+    input[type=range] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       OPERATIONS SCREEN (MAIN GAME)
+    ════════════════════════════════════════════════════ */
+    #screen-ops {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      background: transparent;
+      pointer-events: none;
+    }
+    #screen-ops:not(.hidden) > * {
+      pointer-events: auto;
+    }
+    #screen-ops.hidden {
+      display: none !important;
+      pointer-events: none !important;
+    }
+    #screen-ops.hidden > * {
+      display: none !important;
+      pointer-events: none !important;
+    }
+
+    /* Top HUD */
+    .ops-topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      background: rgba(3,6,16,0.85);
+      border-bottom: 1px solid var(--panel-border);
+      backdrop-filter: blur(10px);
+      flex-wrap: wrap;
+    }
+
+    .mission-name-hud {
+      font-size: 0.85rem;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      flex: 1;
+    }
+
+    .hud-stats {
+      display: flex;
+      gap: 20px;
+    }
+
+    .hud-stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .hud-stat .val {
+      font-size: 1.1rem;
+      color: #fff;
+      font-weight: bold;
+    }
+    .hud-stat .lbl {
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+
+    .mission-clock {
+      font-size: 0.85rem;
+      color: var(--warn);
+      letter-spacing: 0.1em;
+      border: 1px solid rgba(255,204,0,0.3);
+      padding: 4px 12px;
+      border-radius: var(--ui-radius);
+    }
+
+    /* Side panels */
+    .ops-sidebar {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 16px;
+      gap: 12px;
+      pointer-events: none;
+    }
+    .ops-sidebar > * { pointer-events: auto; }
+
+    .ops-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr 280px;
+      pointer-events: none;
+      height: 100%;
+    }
+
+    .event-card {
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      border-radius: var(--ui-radius);
+      padding: 14px;
+      animation: slideIn 0.3s ease;
+      backdrop-filter: blur(8px);
+    }
+    @keyframes slideIn {
+      from { transform: translateX(-20px); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+    .event-title {
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      color: var(--accent2);
+      margin-bottom: 8px;
+    }
+    .event-desc {
+      font-size: 0.7rem;
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .event-choices {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .choice-btn {
+      font-size: 0.68rem;
+      padding: 8px 12px;
+      border: 1px solid var(--panel-border);
+      background: rgba(60,150,255,0.05);
+      color: var(--text);
+      cursor: pointer;
+      border-radius: 4px;
+      text-align: left;
+      font-family: var(--font);
+      transition: all 0.2s;
+      letter-spacing: 0.05em;
+    }
+    .choice-btn:hover {
+      border-color: var(--accent);
+      background: rgba(60,150,255,0.15);
+      color: #fff;
+    }
+
+    /* Instrument panel */
+    .instrument-panel {
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      border-radius: var(--ui-radius);
+      padding: 14px;
+      backdrop-filter: blur(8px);
+    }
+
+    .instrument-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .instrument-cell {
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+      padding: 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .instrument-cell:hover { border-color: var(--accent); }
+    .instrument-cell.scanning {
+      border-color: var(--success);
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .inst-icon { font-size: 1.5rem; }
+    .inst-name { font-size: 0.6rem; color: var(--text-dim); margin-top: 4px; }
+    .inst-data { font-size: 0.65rem; color: var(--success); margin-top: 2px; }
+
+    /* Telemetry */
+    .telemetry-graph {
+      width: 100%;
+      height: 80px;
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+      margin-top: 8px;
+    }
+    #telem-canvas { width: 100%; height: 100%; }
+
+    /* ═══════════════════════════════════════════════════
+       RESULTS SCREEN
+    ════════════════════════════════════════════════════ */
+    #screen-results {
+      flex-direction: column;
+      gap: 24px;
+      background: radial-gradient(ellipse at center, rgba(10,20,60,0.95) 0%, rgba(3,6,16,0.98) 70%);
+    }
+
+    .results-container {
+      max-width: 700px;
+      width: 100%;
+      padding: 0 24px;
+    }
+
+    .results-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .results-header h2 {
+      font-size: 2.5rem;
+      letter-spacing: 0.2em;
+    }
+    .results-header h2.success { color: var(--success); text-shadow: 0 0 30px rgba(0,230,118,0.5); }
+    .results-header h2.failure { color: var(--danger); text-shadow: 0 0 30px rgba(255,23,68,0.5); }
+
+    .score-breakdown {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .score-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--panel-border);
+      padding-bottom: 8px;
+    }
+    .score-label { font-size: 0.8rem; color: var(--text-dim); letter-spacing: 0.1em; }
+    .score-val { font-size: 1rem; color: #fff; }
+    .score-val.positive { color: var(--success); }
+    .score-val.negative { color: var(--danger); }
+
+    .total-score {
+      text-align: center;
+      padding: 20px;
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      margin-bottom: 20px;
+      background: rgba(60,150,255,0.08);
+    }
+    .total-score .val { font-size: 3rem; color: #fff; }
+    .total-score .lbl { font-size: 0.75rem; color: var(--text-dim); letter-spacing: 0.2em; }
+
+    .mission-report {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      line-height: 1.8;
+      border: 1px solid var(--panel-border);
+      padding: 16px;
+      border-radius: var(--ui-radius);
+      margin-bottom: 20px;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       NOTIFICATIONS
+    ════════════════════════════════════════════════════ */
+    #notifications {
+      position: fixed;
+      top: 70px;
+      right: 20px;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+      max-width: 320px;
+    }
+
+    .notif {
+      border: 1px solid;
+      border-radius: var(--ui-radius);
+      padding: 10px 14px;
+      font-size: 0.72rem;
+      backdrop-filter: blur(10px);
+      animation: notifIn 0.3s ease;
+      transition: opacity 0.5s ease;
+    }
+    .notif.info { border-color: var(--accent); background: rgba(60,150,255,0.15); color: var(--text); }
+    .notif.warn { border-color: var(--warn); background: rgba(255,204,0,0.15); color: var(--warn); }
+    .notif.danger { border-color: var(--danger); background: rgba(255,23,68,0.15); color: var(--danger); }
+    .notif.success { border-color: var(--success); background: rgba(0,230,118,0.15); color: var(--success); }
+    @keyframes notifIn {
+      from { transform: translateX(40px); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+
+    /* ═══════════════════════════════════════════════════
+       LAUNCH VEHICLE SELECTOR
+    ════════════════════════════════════════════════════ */
+    .lv-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .lv-card {
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .lv-card:hover, .lv-card.selected {
+      border-color: var(--accent);
+      background: rgba(60,150,255,0.1);
+    }
+    .lv-name { font-size: 0.75rem; color: #fff; }
+    .lv-payload { font-size: 0.65rem; color: var(--text-dim); margin-top: 4px; }
+    .lv-price { font-size: 0.7rem; color: var(--warn); margin-top: 4px; }
+
+    /* ═══════════════════════════════════════════════════
+       MISC UTILITY
+    ════════════════════════════════════════════════════ */
+    .section-title {
+      font-size: 0.72rem;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid var(--panel-border);
+      margin: 4px 0;
+    }
+
+    .text-sm { font-size: 0.72rem; }
+    .text-xs { font-size: 0.65rem; }
+    .text-dim { color: var(--text-dim); }
+    .text-warn { color: var(--warn); }
+    .text-success { color: var(--success); }
+    .text-danger { color: var(--danger); }
+
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .gap-sm { gap: 6px; }
+    .gap-md { gap: 12px; }
+    .mt-sm { margin-top: 6px; }
+    .mt-md { margin-top: 12px; }
+
+    /* Overlay backdrop for builder spacecraft preview */
+    .craft-info-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      padding: 16px 20px;
+      background: rgba(3,6,16,0.9);
+      border-top: 1px solid var(--panel-border);
+    }
+
+    .craft-name-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .craft-name-input {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--panel-border);
+      color: #fff;
+      font-family: var(--font);
+      font-size: 1rem;
+      letter-spacing: 0.15em;
+      padding: 4px;
+      outline: none;
+      flex: 1;
+    }
+    .craft-name-input:focus { border-bottom-color: var(--accent); }
+
+    /* Tooltip */
+    [data-tip] { position: relative; }
+    [data-tip]:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      color: var(--text);
+      white-space: nowrap;
+      z-index: 999;
+      pointer-events: none;
+    }
+
+    /* Events log */
+    .events-log {
+      max-height: 160px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 4px;
+    }
+    .events-log::-webkit-scrollbar { width: 4px; }
+    .events-log::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 2px; }
+
+    .log-entry {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      display: flex;
+      gap: 8px;
+    }
+    .log-time { color: var(--accent); flex-shrink: 0; }
+
+    /* Loading bar */
+    .progress-bar {
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+
+    /* Builder top nav */
+    .builder-nav {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .builder-steps {
+      display: flex;
+      gap: 8px;
+    }
+    .build-step {
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      padding: 6px 14px;
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      color: var(--text-dim);
+      transition: all 0.2s;
+    }
+    .build-step.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(60,150,255,0.1);
+    }
+    .build-step.done {
+      border-color: var(--success);
+      color: var(--success);
+    }
+
+    /* Canvas overlay labels */
+    .canvas-label {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      letter-spacing: 0.15em;
+      pointer-events: none;
+    }
+
+    /* Mini-map */
+    #minimap {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      width: 160px;
+      height: 160px;
+      border: 1px solid var(--panel-border);
+      border-radius: 50%;
+      overflow: hidden;
+      background: rgba(3,6,16,0.8);
+      backdrop-filter: blur(8px);
+    }
+    #minimap-canvas { width: 100%; height: 100%; }
+
+    /* Phase progress */
+    .phase-progress {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.65rem;
+      color: var(--text-dim);
+    }
+    .phase-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      border: 1px solid var(--panel-border);
+      background: transparent;
+      transition: all 0.3s;
+    }
+    .phase-dot.done { background: var(--success); border-color: var(--success); }
+    .phase-dot.active { background: var(--accent); border-color: var(--accent); animation: pulse 1s infinite; }
+
+    /* Flight Dock & Interactive Controls */
+    .flight-dock {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 24px;
+      background: rgba(3, 6, 16, 0.92);
+      border-top: 1px solid var(--panel-border);
+      backdrop-filter: blur(12px);
+      gap: 16px;
+      flex-wrap: wrap;
+      z-index: 20;
+    }
+
+    .dock-cluster {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dock-btn {
+      padding: 8px 14px;
+      border: 1px solid var(--panel-border);
+      background: rgba(10, 25, 55, 0.7);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      border-radius: var(--ui-radius);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dock-btn:hover {
+      border-color: var(--accent);
+      background: rgba(60, 150, 255, 0.2);
+      color: #fff;
+      box-shadow: 0 0 8px rgba(60, 150, 255, 0.4);
+    }
+    .dock-btn.active {
+      border-color: var(--accent);
+      background: rgba(60, 150, 255, 0.35);
+      color: #fff;
+    }
+    .dock-btn.burn-btn {
+      border-color: var(--accent2);
+      background: rgba(255, 107, 53, 0.2);
+      color: #fff;
+    }
+    .dock-btn.burn-btn:hover, .dock-btn.burn-btn:active {
+      background: rgba(255, 107, 53, 0.45);
+      box-shadow: 0 0 12px rgba(255, 107, 53, 0.6);
+    }
+
+    /* On-screen Attitude Control D-Pad */
+    .attitude-dpad {
+      display: grid;
+      grid-template-columns: 28px 28px 28px;
+      grid-template-rows: 28px 28px 28px;
+      gap: 3px;
+    }
+    .dpad-btn {
+      background: rgba(15, 30, 60, 0.85);
+      border: 1px solid var(--panel-border);
+      color: var(--text);
+      font-size: 0.65rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border-radius: 3px;
+      font-family: var(--font);
+      transition: all 0.1s;
+    }
+    .dpad-btn:hover, .dpad-btn:active {
+      border-color: var(--accent);
+      background: rgba(60, 150, 255, 0.3);
+      color: #fff;
+    }
+
+    /* Flight Instruments HUD in Center */
+    .flight-telemetry-badge {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: rgba(5, 12, 28, 0.85);
+      padding: 6px 16px;
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+    }
+    .telem-unit {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .telem-unit .num {
+      font-size: 0.85rem;
+      color: #fff;
+      font-weight: bold;
+    }
+    .telem-unit .label {
+      font-size: 0.55rem;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+
+    /* Controls Overlay Modal */
+    #controls-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 6, 16, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.3s;
+    }
+    #controls-modal.hidden {
+      display: none !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    .modal-box {
+      background: var(--panel);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 24px 32px;
+      max-width: 560px;
+      width: 90%;
+      box-shadow: 0 0 30px rgba(60, 150, 255, 0.3);
+    }
+    .modal-box h3 {
+      font-size: 1.1rem;
+      letter-spacing: 0.2em;
+      color: #fff;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .key-grid {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 10px 14px;
+      font-size: 0.75rem;
+      margin-bottom: 20px;
+    }
+    .key-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border: 1px solid var(--panel-border);
+      background: rgba(60, 150, 255, 0.15);
+      color: #fff;
+      border-radius: 4px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .builder-layout { grid-template-columns: 1fr; }
+      .builder-panel:last-child { border-left: none; border-top: 1px solid var(--panel-border); }
+      .launch-layout { grid-template-columns: 1fr; }
+      .ops-layout { grid-template-columns: 1fr; }
+      .flight-dock { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN: TITLE
+════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-title">
+  <div class="title-logo">
+    <h1>COSMODEX</h1>
+    <div class="subtitle">Space Mission Design Command</div>
+    <div class="tagline">NASA Space Apps Challenge 2026 — Orbital Mechanics Simulator</div>
+  </div>
+  <div class="title-menu">
+    <button class="btn primary" onclick="Game.goTo('mission')">▶ NEW MISSION</button>
+    <button class="btn" onclick="Game.showHowToPlay()">? HOW TO PLAY</button>
+    <button class="btn" onclick="Game.showCredits()">★ ABOUT</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN: MISSION SELECT
+════════════════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-mission">
+  <div class="mission-header">
+    <h2>SELECT YOUR MISSION</h2>
+    <p>CHOOSE A DESTINATION — EACH MISSION HAS UNIQUE CONSTRAINTS & OBJECTIVES</p>
+  </div>
+  <div class="missions-grid" id="missions-grid"></div>
+  <div class="mission-actions">
+    <button class="btn" onclick="Game.goTo('title')">◀ BACK</button>
+    <button class="btn primary" id="btn-begin-mission" disabled onclick="Game.beginMission()">BEGIN MISSION ▶</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN: SPACECRAFT BUILDER
+════════════════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-builder">
+  <div class="builder-layout">
+    <div class="builder-nav">
+      <div class="builder-steps">
+        <div class="build-step active" id="step-structure">① STRUCTURE</div>
+        <div class="build-step" id="step-power">② POWER</div>
+        <div class="build-step" id="step-science">③ SCIENCE</div>
+        <div class="build-step" id="step-comm">④ COMMS</div>
+      </div>
+      <div class="text-sm text-dim" id="builder-mission-title"></div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn" onclick="Game.goTo('mission')" style="padding:8px 16px;font-size:0.75rem">◀ BACK</button>
+        <button class="btn primary" id="btn-proceed-launch" onclick="Game.proceedToLaunch()" style="padding:8px 16px;font-size:0.75rem">PROCEED TO LAUNCH ▶</button>
+      </div>
+    </div>
+
+    <!-- Left panel: components library -->
+    <div class="builder-panel" id="builder-left-panel">
+      <div class="panel-title">COMPONENT LIBRARY</div>
+      <div id="builder-components"></div>
+    </div>
+
+    <!-- Center: 3D preview -->
+    <div class="builder-preview">
+      <canvas id="spacecraft-canvas"></canvas>
+      <div class="craft-info-bar">
+        <div class="craft-name-row">
+          <span class="text-dim text-xs">SPACECRAFT ID:</span>
+          <input class="craft-name-input" id="craft-name" value="PROBE-01" maxlength="20" spellcheck="false" />
+        </div>
+        <div class="budget-display" id="budget-display"></div>
+      </div>
+      <div class="canvas-label">DRAG TO ROTATE · SCROLL TO ZOOM</div>
+    </div>
+
+    <!-- Right panel: stats & constraints -->
+    <div class="builder-panel" id="builder-right-panel">
+      <div class="panel-title">MISSION CONSTRAINTS</div>
+      <div id="mission-constraints"></div>
+      <hr class="divider" />
+      <div class="panel-title" style="margin-top:8px">EQUIPPED SYSTEMS</div>
+      <div id="equipped-list"></div>
+      <hr class="divider" />
+      <div class="panel-title" style="margin-top:8px">DESIGN NOTES</div>
+      <div class="text-xs text-dim" id="design-notes" style="line-height:1.7">
+        Select components to build your spacecraft. Balance mass, power, and science value within your budget.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN: LAUNCH PHASE
+════════════════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-launch">
+  <div class="launch-layout">
+    <div class="launch-view">
+      <canvas id="launch-canvas"></canvas>
+      <div class="canvas-label" id="launch-hint">SELECT LAUNCH VEHICLE & CONFIGURE TRAJECTORY</div>
+    </div>
+
+    <div class="launch-controls">
+      <div class="panel-title">LAUNCH OPERATIONS</div>
+
+      <div class="launch-step active" id="lstep-vehicle">
+        <div class="step-title">① LAUNCH VEHICLE</div>
+        <div class="lv-grid" id="lv-grid"></div>
+      </div>
+
+      <div class="launch-step" id="lstep-window">
+        <div class="step-title">② LAUNCH WINDOW</div>
+        <div class="slider-group">
+          <div class="slider-label">
+            <span class="text-xs text-dim">DEPARTURE ANGLE</span>
+            <span class="text-xs" id="depart-val">0°</span>
+          </div>
+          <input type="range" id="slider-depart" min="0" max="360" value="0" oninput="Game.updateLaunchParam('depart', this.value)" />
+          <div class="slider-label">
+            <span class="text-xs text-dim">INCLINATION</span>
+            <span class="text-xs" id="incl-val">0°</span>
+          </div>
+          <input type="range" id="slider-incl" min="0" max="90" value="0" oninput="Game.updateLaunchParam('incl', this.value)" />
+        </div>
+      </div>
+
+      <div class="launch-step" id="lstep-orbit">
+        <div class="step-title">③ TARGET ORBIT / TRAJECTORY</div>
+        <div class="orbit-diagram">
+          <canvas id="orbit-canvas"></canvas>
+        </div>
+        <div class="slider-group" style="margin-top:10px;">
+          <div class="slider-label">
+            <span class="text-xs text-dim">PERIAPSIS ALT (km)</span>
+            <span class="text-xs" id="peri-val">200</span>
+          </div>
+          <input type="range" id="slider-peri" min="150" max="2000" value="200" oninput="Game.updateLaunchParam('peri', this.value)" />
+          <div class="slider-label">
+            <span class="text-xs text-dim">APOAPSIS ALT (km)</span>
+            <span class="text-xs" id="apo-val">400</span>
+          </div>
+          <input type="range" id="slider-apo" min="150" max="50000" value="400" oninput="Game.updateLaunchParam('apo', this.value)" />
+        </div>
+      </div>
+
+      <div class="launch-step" id="lstep-deltav">
+        <div class="step-title">④ DELTA-V BUDGET</div>
+        <div class="text-xs text-dim" id="deltav-info">Required Δv: —</div>
+        <div class="progress-bar mt-sm">
+          <div class="progress-fill" id="deltav-bar" style="width:0%"></div>
+        </div>
+        <div class="text-xs text-dim mt-sm" id="deltav-status">Configure trajectory above</div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:auto;">
+        <button class="btn" onclick="Game.goTo('builder')" style="flex:1;padding:10px;font-size:0.75rem">◀ REDESIGN</button>
+        <button class="btn primary" id="btn-launch" onclick="Game.executeLaunch()" style="flex:1;padding:10px;font-size:0.75rem">🚀 LAUNCH</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN: OPERATIONS (MAIN GAMEPLAY)
+════════════════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-ops">
+  <div class="ops-topbar">
+    <div class="mission-name-hud" id="ops-mission-name">MISSION: LOADING</div>
+    <div class="hud-stats">
+      <div class="hud-stat">
+        <div class="val" id="hud-score">0</div>
+        <div class="lbl">SCIENCE PTS</div>
+      </div>
+      <div class="hud-stat">
+        <div class="val" id="hud-health">100%</div>
+        <div class="lbl">S/C HEALTH</div>
+      </div>
+      <div class="hud-stat">
+        <div class="val" id="hud-power">100%</div>
+        <div class="lbl">POWER</div>
+      </div>
+      <div class="hud-stat">
+        <div class="val" id="hud-data">0</div>
+        <div class="lbl">DATA (Gb)</div>
+      </div>
+      <div class="hud-stat">
+        <div class="val" id="hud-budget">$∞B</div>
+        <div class="lbl">BUDGET LEFT</div>
+      </div>
+    </div>
+    <div class="mission-clock" id="mission-clock">T+00:000</div>
+    <button class="btn danger-btn" onclick="Game.endMission()" style="padding:6px 14px;font-size:0.7rem">■ END MISSION</button>
+  </div>
+
+  <div class="ops-layout">
+    <!-- Left sidebar: events & choices -->
+    <div class="ops-sidebar">
+      <div class="event-card" id="active-event" style="display:none"></div>
+      <div class="instrument-panel">
+        <div class="section-title">EVENTS LOG</div>
+        <div class="events-log" id="events-log"></div>
+      </div>
+    </div>
+
+    <!-- Center: main 3D view (transparent) -->
+    <div style="position:relative;pointer-events:none;">
+      <canvas class="canvas-label" style="bottom:40px; position:absolute; left:50%; transform:translateX(-50%); background:transparent; border:none; font-size:0.65rem; color:rgba(100,130,200,0.5); pointer-events:none;">
+      DRAG TO ORBIT CAMERA · SCROLL TO ZOOM · RIGHT-DRAG TO PAN
+      </canvas>
+    </div>
+
+    <!-- Right sidebar: instruments -->
+    <div class="ops-sidebar">
+      <div class="instrument-panel">
+        <div class="section-title">SCIENCE INSTRUMENTS</div>
+        <div class="instrument-grid" id="instrument-grid"></div>
+      </div>
+      <div class="instrument-panel">
+        <div class="section-title">TELEMETRY</div>
+        <div class="telemetry-graph">
+          <canvas id="telem-canvas"></canvas>
+        </div>
+        <div class="text-xs text-dim mt-sm" id="telem-status">Systems nominal</div>
+      </div>
+      <div class="instrument-panel">
+        <div class="section-title">PHASE PROGRESS</div>
+        <div class="phase-progress" id="phase-progress"></div>
+        <div class="text-xs mt-sm" id="phase-label" style="color:var(--accent)">CRUISE PHASE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive Flight Control Dock -->
+  <div class="flight-dock">
+    <!-- Maneuver Controls & D-Pad -->
+    <div class="dock-cluster">
+      <div class="attitude-dpad">
+        <div></div>
+        <button class="dpad-btn" title="Pitch Down (W)" onmousedown="Game.setSteer('pitch', -1)" onmouseup="Game.setSteer('pitch', 0)">▲</button>
+        <div></div>
+        <button class="dpad-btn" title="Yaw Left (A)" onmousedown="Game.setSteer('yaw', -1)" onmouseup="Game.setSteer('yaw', 0)">◀</button>
+        <button class="dpad-btn" title="Stabilize (SAS)" onclick="Game.toggleSAS()" id="btn-sas">SAS</button>
+        <button class="dpad-btn" title="Yaw Right (D)" onmousedown="Game.setSteer('yaw', 1)" onmouseup="Game.setSteer('yaw', 0)">▶</button>
+        <div></div>
+        <button class="dpad-btn" title="Pitch Up (S)" onmousedown="Game.setSteer('pitch', 1)" onmouseup="Game.setSteer('pitch', 0)">▼</button>
+        <div></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="dock-btn burn-btn" id="btn-burn-prograde" onmousedown="Game.startBurn(1)" onmouseup="Game.stopBurn()" title="Prograde Boost (Hold Space)">
+          🔥 PROGRADE [SPACE]
+        </button>
+        <button class="dock-btn" id="btn-burn-retrograde" onmousedown="Game.startBurn(-1)" onmouseup="Game.stopBurn()" title="Retrograde Burn (Hold X)">
+          ❄ RETROGRADE [X]
+        </button>
+      </div>
+    </div>
+
+    <!-- Telemetry & Flight Gauges -->
+    <div class="flight-telemetry-badge">
+      <div class="telem-unit">
+        <span class="num" id="flight-vel">7.4 km/s</span>
+        <span class="label">ORBIT SPEED</span>
+      </div>
+      <div class="telem-unit">
+        <span class="num" id="flight-alt">350 km</span>
+        <span class="label">ALTITUDE</span>
+      </div>
+      <div class="telem-unit">
+        <span class="num" id="flight-deltav">3,200 m/s</span>
+        <span class="label">ΔV REMAINING</span>
+      </div>
+      <div class="telem-unit">
+        <span class="num" id="flight-sas-status" style="color:var(--success)">ON</span>
+        <span class="label">SAS STABILITY</span>
+      </div>
+    </div>
+
+    <!-- Camera & Simulation Controls -->
+    <div class="dock-cluster">
+      <!-- Camera modes -->
+      <div style="display:flex;gap:4px;">
+        <button class="dock-btn active" id="cam-btn-orbit" onclick="Game.setCameraMode('orbit')" title="Planet Orbit View (1)">🌐 ORBIT</button>
+        <button class="dock-btn" id="cam-btn-chase" onclick="Game.setCameraMode('chase')" title="Chase View (2)">🚀 CHASE</button>
+        <button class="dock-btn" id="cam-btn-cockpit" onclick="Game.setCameraMode('cockpit')" title="Sensor/Cockpit (3)">👁 SENSOR</button>
+      </div>
+
+      <!-- Time warp -->
+      <div style="display:flex;gap:4px;">
+        <button class="dock-btn active" id="warp-btn-1" onclick="Game.setTimeWarp(1)">1x</button>
+        <button class="dock-btn" id="warp-btn-5" onclick="Game.setTimeWarp(5)">5x</button>
+        <button class="dock-btn" id="warp-btn-25" onclick="Game.setTimeWarp(25)">25x</button>
+      </div>
+
+      <!-- Audio & Help -->
+      <button class="dock-btn" id="btn-sound" onclick="Game.toggleAudio()" title="Sound Effects">🔊 SFX</button>
+      <button class="dock-btn" onclick="Game.toggleControlsModal()" title="View Keybinds">⌨ HELP [H]</button>
+    </div>
+  </div>
+</div>
+
+<!-- Controls Help Modal -->
+<div id="controls-modal" class="hidden" onclick="Game.toggleControlsModal()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <h3>SPACE MISSION FLIGHT CONTROLS</h3>
+    <div class="key-grid">
+      <div><span class="key-badge">SPACE</span> / <span class="key-badge">SHIFT</span></div>
+      <div><strong>Prograde Burn</strong> — Fire main engine to accelerate & raise orbit</div>
+
+      <div><span class="key-badge">X</span> / <span class="key-badge">CTRL</span></div>
+      <div><strong>Retrograde Burn</strong> — Reverse thrusters to brake & lower orbit</div>
+
+      <div><span class="key-badge">W</span> / <span class="key-badge">S</span></div>
+      <div><strong>Pitch Attitude</strong> — Nose down / Nose up</div>
+
+      <div><span class="key-badge">A</span> / <span class="key-badge">D</span></div>
+      <div><strong>Yaw Attitude</strong> — Turn left / Turn right</div>
+
+      <div><span class="key-badge">Q</span> / <span class="key-badge">E</span></div>
+      <div><strong>Roll Attitude</strong> — Counter-clockwise / Clockwise roll</div>
+
+      <div><span class="key-badge">F</span></div>
+      <div><strong>Toggle SAS</strong> — Auto-stabilize attitude orientation</div>
+
+      <div><span class="key-badge">1</span> / <span class="key-badge">2</span> / <span class="key-badge">3</span> / <span class="key-badge">C</span></div>
+      <div><strong>Camera Views</strong> — Orbit Planet, Chase Craft, Sensor/Cockpit</div>
+
+      <div><span class="key-badge">[</span> / <span class="key-badge">]</span></div>
+      <div><strong>Time Warp</strong> — Slow down / Speed up orbital simulation</div>
+
+      <div><span class="key-badge">CLICK TARGET</span></div>
+      <div><strong>Planetary Waypoint</strong> — Click 3D glowing science anomalies on the planet surface to initiate targeted scans</div>
+    </div>
+    <div style="text-align:center;">
+      <button class="btn primary" onclick="Game.toggleControlsModal()">GOT IT, COMMANDER</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN: RESULTS
+════════════════════════════════════════════════════ -->
+<div class="screen hidden" id="screen-results">
+  <div class="results-container">
+    <div class="results-header">
+      <h2 id="results-title">MISSION COMPLETE</h2>
+      <div class="text-sm text-dim mt-md" id="results-subtitle"></div>
+    </div>
+    <div class="score-breakdown" id="score-breakdown"></div>
+    <div class="total-score">
+      <div class="lbl">TOTAL MISSION SCORE</div>
+      <div class="val" id="total-score">0</div>
+    </div>
+    <div class="mission-report" id="mission-report"></div>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <button class="btn" onclick="Game.goTo('title')" style="flex:1">◀ MAIN MENU</button>
+      <button class="btn primary" onclick="Game.goTo('mission')" style="flex:1">▶ NEW MISSION</button>
+    </div>
+  </div>
+</div>
+
+<!-- Notifications container -->
+<div id="notifications"></div>
+
+<script type="module" src="game.js"></script>
+</body>
+</html>
+
