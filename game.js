@@ -6,6 +6,72 @@
 
 import * as THREE from './lib/three.module.js';
 import { OrbitControls } from './lib/OrbitControls.js';
+import { GLTFLoader } from './lib/GLTFLoader.js';
+
+// ─────────────────────────────────────────────────────
+// KENNEY SPACE KIT ASSET LOADER
+// ─────────────────────────────────────────────────────
+
+class AssetLoader {
+  constructor() {
+    this.models = {};
+    this.loader = new GLTFLoader();
+    this.loaded = false;
+    this.loadPromise = null;
+  }
+
+  loadAll() {
+    if (this.loadPromise) return this.loadPromise;
+
+    const list = [
+      'craft_speederA', 'craft_speederB', 'craft_cargoA', 'craft_miner',
+      'rocket_baseA', 'rocket_fuelA', 'rocket_sidesA', 'rocket_topA',
+      'platform_large', 'hangar_largeA',
+      'satelliteDish', 'satelliteDish_detailed', 'machine_generator', 'machine_wireless',
+      'crater', 'craterLarge', 'meteor', 'meteor_detailed',
+      'rock_crystalsLargeA', 'rover', 'astronautA', 'alien'
+    ];
+
+    this.loadPromise = Promise.all(list.map(id => {
+      return new Promise(resolve => {
+        this.loader.load(`./assets/models/${id}.glb`, gltf => {
+          gltf.scene.traverse(node => {
+            if (node.isMesh) {
+              node.castShadow = true;
+              node.receiveShadow = true;
+            }
+          });
+          this.models[id] = gltf.scene;
+          resolve();
+        }, undefined, () => resolve());
+      });
+    })).then(() => {
+      this.loaded = true;
+      console.log('✓ Kenney Space Kit assets loaded into memory');
+    });
+
+    return this.loadPromise;
+  }
+
+  clone(id, align = 'center') {
+    if (!this.models[id]) return null;
+    const raw = this.models[id].clone(true);
+    const wrapper = new THREE.Group();
+    const box = new THREE.Box3().setFromObject(raw);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    if (align === 'bottom') {
+      raw.position.set(-center.x, -box.min.y, -center.z);
+    } else {
+      raw.position.set(-center.x, -center.y, -center.z);
+    }
+    wrapper.add(raw);
+    return wrapper;
+  }
+}
+
+const Assets = new AssetLoader();
+window.Assets = Assets;
 
 // ─────────────────────────────────────────────────────
 // DATA TABLES
@@ -366,112 +432,109 @@ function createOrbitRing(radius, color = 0x3c96ff, opacity = 0.2) {
 function buildSpacecraftMesh(equipped) {
   const group = new THREE.Group();
 
-  // Determine bus size
+  // Determine bus model from Kenney Space Kit
   const bus = equipped.find(c => c.id.startsWith('bus_'));
-  let busScale = 0.4;
+  let modelKey = 'craft_speederA';
+  let busScale = 0.55;
+
   if (bus) {
-    if (bus.id === 'bus_med') busScale = 0.6;
-    if (bus.id === 'bus_large') busScale = 0.85;
+    if (bus.id === 'bus_small') {
+      modelKey = 'craft_speederA';
+      busScale = 0.55;
+    } else if (bus.id === 'bus_med') {
+      modelKey = 'craft_speederB';
+      busScale = 0.65;
+    } else if (bus.id === 'bus_large') {
+      modelKey = 'craft_cargoA';
+      busScale = 0.75;
+    }
   }
 
-  // Main body — octagonal prism
-  const bodyGeo = new THREE.CylinderGeometry(busScale, busScale * 0.9, busScale * 1.6, 8, 1);
-  const bodyMat = new THREE.MeshPhongMaterial({ color: 0xccccdd, flatShading: true, shininess: 30 });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  group.add(body);
+  // Heavy survey / miner payload
+  if (equipped.some(c => c.id === 'drill' || c.id === 'sample_return')) {
+    modelKey = 'craft_miner';
+  }
 
-  // Top cone (antenna mount)
-  const coneGeo = new THREE.ConeGeometry(busScale * 0.5, busScale * 0.6, 6);
-  const coneMat = new THREE.MeshPhongMaterial({ color: 0xaabbcc, flatShading: true });
-  const cone = new THREE.Mesh(coneGeo, coneMat);
-  cone.position.y = busScale * 1.1;
-  group.add(cone);
+  const kenneyBus = Assets.clone(modelKey, 'center');
+  if (kenneyBus) {
+    kenneyBus.scale.set(busScale, busScale, busScale);
+    kenneyBus.rotation.y = Math.PI; // Face forward
+    group.add(kenneyBus);
+  } else {
+    // Procedural fallback body
+    const bodyGeo = new THREE.CylinderGeometry(busScale, busScale * 0.9, busScale * 1.6, 8, 1);
+    const bodyMat = new THREE.MeshPhongMaterial({ color: 0xccccdd, flatShading: true, shininess: 30 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    group.add(body);
 
-  // Bottom nozzle
-  const nozGeo = new THREE.CylinderGeometry(busScale * 0.2, busScale * 0.35, busScale * 0.4, 6);
-  const nozMat = new THREE.MeshPhongMaterial({ color: 0x666677, flatShading: true });
-  const noz = new THREE.Mesh(nozGeo, nozMat);
-  noz.position.y = -busScale * 1.0;
-  group.add(noz);
+    const coneGeo = new THREE.ConeGeometry(busScale * 0.5, busScale * 0.6, 6);
+    const coneMat = new THREE.MeshPhongMaterial({ color: 0xaabbcc, flatShading: true });
+    const cone = new THREE.Mesh(coneGeo, coneMat);
+    cone.position.y = busScale * 1.1;
+    group.add(cone);
+  }
 
-  // Solar panels
+  // Antennas from Kenney Space Kit
+  if (equipped.some(c => c.id === 'antenna_high')) {
+    const dish = Assets.clone('satelliteDish_detailed', 'center');
+    if (dish) {
+      dish.scale.set(0.35, 0.35, 0.35);
+      dish.position.set(0, busScale * 0.8, -busScale * 0.2);
+      dish.rotation.x = -0.3;
+      group.add(dish);
+    } else {
+      const dishGeo = new THREE.SphereGeometry(busScale * 0.7, 8, 6, 0, Math.PI * 2, 0, Math.PI / 3);
+      const dishMat = new THREE.MeshPhongMaterial({ color: 0xddddee, flatShading: true, side: THREE.DoubleSide });
+      const dishMesh = new THREE.Mesh(dishGeo, dishMat);
+      dishMesh.rotation.x = Math.PI;
+      dishMesh.position.set(0, busScale * 1.6, busScale * 0.5);
+      group.add(dishMesh);
+    }
+  } else if (equipped.some(c => c.id === 'antenna_med')) {
+    const dish = Assets.clone('satelliteDish', 'center');
+    if (dish) {
+      dish.scale.set(0.28, 0.28, 0.28);
+      dish.position.set(0, busScale * 0.75, 0);
+      group.add(dish);
+    }
+  }
+
+  // RTG Power Generator from Kenney Space Kit
+  if (equipped.some(c => c.id === 'rtg')) {
+    const rtg = Assets.clone('machine_generator', 'center');
+    if (rtg) {
+      rtg.scale.set(0.22, 0.22, 0.22);
+      rtg.position.set(0, -0.15, -busScale * 0.75);
+      group.add(rtg);
+    }
+  }
+
+  // Science Sensor Arrays from Kenney Space Kit
+  if (equipped.some(c => c.id === 'radar' || c.id === 'spectrometer' || c.id === 'particle')) {
+    const sensor = Assets.clone('machine_wireless', 'center');
+    if (sensor) {
+      sensor.scale.set(0.24, 0.24, 0.24);
+      sensor.position.set(0, busScale * 0.45, busScale * 0.55);
+      group.add(sensor);
+    }
+  }
+
+  // Solar panels with articulated struts
   const hasSolar = equipped.some(c => c.id.startsWith('solar_'));
   if (hasSolar) {
     const large = equipped.some(c => c.id === 'solar_large');
-    const pW = large ? busScale * 2.5 : busScale * 1.5;
-    const pH = busScale * 0.8;
+    const pW = large ? busScale * 2.6 : busScale * 1.6;
+    const pH = busScale * 0.85;
     const panelGeo = new THREE.BoxGeometry(pW, 0.03, pH);
-    const panelMat = new THREE.MeshPhongMaterial({ color: 0x2244aa, flatShading: true, shininess: 60 });
+    const panelMat = new THREE.MeshPhongMaterial({ color: 0x1a3a8a, flatShading: true, shininess: 80 });
 
     const leftPanel = new THREE.Mesh(panelGeo, panelMat);
     leftPanel.position.set(-busScale - pW / 2, 0, 0);
     group.add(leftPanel);
 
-    // panel strut
-    const strutGeo = new THREE.BoxGeometry(busScale * 0.3, 0.02, 0.04);
-    const strutMat = new THREE.MeshPhongMaterial({ color: 0x888899, flatShading: true });
-    const strut1 = new THREE.Mesh(strutGeo, strutMat);
-    strut1.position.set(-busScale - 0.1, 0, 0);
-    group.add(strut1);
-
     const rightPanel = new THREE.Mesh(panelGeo, panelMat);
     rightPanel.position.set(busScale + pW / 2, 0, 0);
     group.add(rightPanel);
-    const strut2 = new THREE.Mesh(strutGeo, strutMat);
-    strut2.position.set(busScale + 0.1, 0, 0);
-    group.add(strut2);
-
-    // panel grid lines
-    const gridMat = new THREE.LineBasicMaterial({ color: 0x1133aa });
-    for (const panel of [leftPanel, rightPanel]) {
-      for (let i = -3; i <= 3; i++) {
-        const pts = [new THREE.Vector3(-pW/2, 0.02, i * pH/7), new THREE.Vector3(pW/2, 0.02, i * pH/7)];
-        const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-        panel.add(new THREE.Line(lineGeo, gridMat));
-      }
-    }
-  }
-
-  // RTG
-  if (equipped.some(c => c.id === 'rtg')) {
-    const rtgGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.6, 6);
-    const rtgMat = new THREE.MeshPhongMaterial({ color: 0x664422, flatShading: true });
-    const rtg = new THREE.Mesh(rtgGeo, rtgMat);
-    rtg.rotation.z = Math.PI / 2;
-    rtg.position.set(busScale + 0.5, -0.2, 0);
-    group.add(rtg);
-
-    // fins
-    for (let i = 0; i < 4; i++) {
-      const finGeo = new THREE.BoxGeometry(0.3, 0.02, 0.15);
-      const fin = new THREE.Mesh(finGeo, rtgMat);
-      fin.position.set(busScale + 0.5, -0.2, 0);
-      fin.rotation.set(0, 0, (i * Math.PI) / 2);
-      group.add(fin);
-    }
-  }
-
-  // High-gain antenna
-  if (equipped.some(c => c.id === 'antenna_high')) {
-    const dishGeo = new THREE.SphereGeometry(busScale * 0.7, 8, 6, 0, Math.PI * 2, 0, Math.PI / 3);
-    const dishMat = new THREE.MeshPhongMaterial({ color: 0xddddee, flatShading: true, side: THREE.DoubleSide });
-    const dish = new THREE.Mesh(dishGeo, dishMat);
-    dish.rotation.x = Math.PI;
-    dish.position.set(0, busScale * 1.6, busScale * 0.5);
-    group.add(dish);
-
-    // feed horn
-    const feedGeo = new THREE.CylinderGeometry(0.03, 0.03, busScale * 0.5, 4);
-    const feed = new THREE.Mesh(feedGeo, new THREE.MeshPhongMaterial({ color: 0x999999, flatShading: true }));
-    feed.position.set(0, busScale * 1.35, busScale * 0.5);
-    group.add(feed);
-  } else if (equipped.some(c => c.id === 'antenna_med')) {
-    const dishGeo = new THREE.SphereGeometry(busScale * 0.4, 6, 4, 0, Math.PI * 2, 0, Math.PI / 3);
-    const dishMat = new THREE.MeshPhongMaterial({ color: 0xccccdd, flatShading: true, side: THREE.DoubleSide });
-    const dish = new THREE.Mesh(dishGeo, dishMat);
-    dish.rotation.x = Math.PI;
-    dish.position.set(0, busScale * 1.5, 0);
-    group.add(dish);
   }
 
   // Magnetometer boom
@@ -489,34 +552,13 @@ function buildSpacecraftMesh(equipped) {
     group.add(sensor);
   }
 
-  // Thermal shield (sunward side plate)
-  if (equipped.some(c => c.id === 'shield_thermal')) {
-    const shGeo = new THREE.BoxGeometry(busScale * 2, busScale * 1.8, 0.06);
-    const shMat = new THREE.MeshPhongMaterial({ color: 0xddcc88, flatShading: true });
-    const sh = new THREE.Mesh(shGeo, shMat);
-    sh.position.set(0, 0, -busScale - 0.1);
-    group.add(sh);
-  }
-
-  // Ion thruster glow
-  if (equipped.some(c => c.id === 'thruster_ion')) {
-    const glowGeo = new THREE.ConeGeometry(0.15, 0.6, 6);
-    const glowMat = new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.4 });
-    const thrGlow = new THREE.Mesh(glowGeo, glowMat);
-    thrGlow.rotation.x = Math.PI;
-    thrGlow.position.y = -busScale * 1.4;
-    thrGlow.name = 'thruster_glow';
-    group.add(thrGlow);
-  }
-
-  // Radar dish (side-mounted)
-  if (equipped.some(c => c.id === 'radar')) {
-    const rdrGeo = new THREE.BoxGeometry(busScale * 1.2, 0.04, busScale * 0.5);
-    const rdrMat = new THREE.MeshPhongMaterial({ color: 0x44aa44, flatShading: true });
-    const rdr = new THREE.Mesh(rdrGeo, rdrMat);
-    rdr.position.set(0, -busScale * 0.3, busScale + 0.2);
-    group.add(rdr);
-  }
+  // Engine exhaust nozzle
+  const nozGeo = new THREE.CylinderGeometry(busScale * 0.15, busScale * 0.28, busScale * 0.35, 8);
+  const nozMat = new THREE.MeshPhongMaterial({ color: 0x333344, flatShading: true });
+  const noz = new THREE.Mesh(nozGeo, nozMat);
+  noz.position.set(0, 0, -busScale * 1.05);
+  noz.rotation.x = Math.PI / 2;
+  group.add(noz);
 
   return group;
 }
@@ -922,6 +964,9 @@ class SpaceMissionGame {
     this.spacecraftMesh = null;
     this.targetPlanetMesh = null;
     this.earthMesh = null;
+    this.titleMoon = null;
+    this.titleAstronaut = null;
+    this.asteroidDebris = [];
     this.orbitCurveMesh = null;
     this.engineFlameParticles = null;
     this.surfaceWaypoints = [];
@@ -940,6 +985,9 @@ class SpaceMissionGame {
     this.launchScene = null;
     this.launchCamera = null;
     this.rocketMesh = null;
+    this.launchPadPlatform = null;
+    this.launchHangar = null;
+    this.launchDish = null;
     this.launchParticles = null;
 
     this.orbitDiagram = null;
@@ -961,6 +1009,11 @@ class SpaceMissionGame {
     this.setupRaycasting();
     this.animateMain();
 
+    // Load Kenney Space Kit assets and upgrade scenes
+    Assets.loadAll().then(() => {
+      this.onAssetsLoaded();
+    });
+
     // Default craft name sync
     const craftNameInput = document.getElementById('craft-name');
     if (craftNameInput) {
@@ -972,6 +1025,59 @@ class SpaceMissionGame {
     // Audio init on first interaction
     window.addEventListener('click', () => this.sound.init(), { once: true });
     window.addEventListener('keydown', () => this.sound.init(), { once: true });
+  }
+
+  onAssetsLoaded() {
+    // 1. Refresh rocket & environment in launch scene
+    if (this.launchScene) {
+      if (this.rocketMesh) {
+        this.launchScene.remove(this.rocketMesh);
+        this.rocketMesh = this.createRocketModel();
+        this.rocketMesh.position.set(0, 4.5, 0);
+        this.launchScene.add(this.rocketMesh);
+      }
+      if (!this.launchPadPlatform) {
+        this.launchPadPlatform = Assets.clone('platform_large', 'bottom');
+        if (this.launchPadPlatform) {
+          this.launchPadPlatform.scale.set(4.5, 3.0, 4.5);
+          this.launchPadPlatform.position.set(0, 0, 0);
+          this.launchScene.add(this.launchPadPlatform);
+        }
+      }
+      if (!this.launchHangar) {
+        this.launchHangar = Assets.clone('hangar_largeA', 'bottom');
+        if (this.launchHangar) {
+          this.launchHangar.scale.set(3.5, 3.5, 3.5);
+          this.launchHangar.position.set(-13, 0, -8);
+          this.launchHangar.rotation.y = Math.PI / 4;
+          this.launchScene.add(this.launchHangar);
+        }
+      }
+      if (!this.launchDish) {
+        this.launchDish = Assets.clone('satelliteDish_detailed', 'bottom');
+        if (this.launchDish) {
+          this.launchDish.scale.set(1.5, 1.5, 1.5);
+          this.launchDish.position.set(10, 0, -5);
+          this.launchDish.rotation.y = -Math.PI / 3;
+          this.launchScene.add(this.launchDish);
+        }
+      }
+    }
+
+    // 2. Floating astronaut in title screen
+    if (this.mainScene && !this.titleAstronaut) {
+      this.titleAstronaut = Assets.clone('astronautA', 'center');
+      if (this.titleAstronaut) {
+        this.titleAstronaut.scale.set(0.9, 0.9, 0.9);
+        this.titleAstronaut.position.set(7.5, 2.2, 5.0);
+        this.mainScene.add(this.titleAstronaut);
+      }
+    }
+
+    // 3. Refresh builder preview craft
+    if (this.builderScene) {
+      this.refreshBuilderCraft();
+    }
   }
 
   setupWindowListeners() {
@@ -1126,6 +1232,14 @@ class SpaceMissionGame {
 
     const titleOrbit = createOrbitRing(18, 0x3c96ff, 0.15);
     this.mainScene.add(titleOrbit);
+
+    // Floating Astronaut in Earth orbit (Kenney)
+    this.titleAstronaut = Assets.clone('astronautA', 'center');
+    if (this.titleAstronaut) {
+      this.titleAstronaut.scale.set(0.9, 0.9, 0.9);
+      this.titleAstronaut.position.set(7.5, 2.2, 5.0);
+      this.mainScene.add(this.titleAstronaut);
+    }
   }
 
   initBuilder3D() {
@@ -1168,6 +1282,7 @@ class SpaceMissionGame {
     this.launchScene = new THREE.Scene();
     this.launchCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
     this.launchCamera.position.set(0, 10, 24);
+    this.launchCamera.lookAt(0, 5, 0);
 
     this.launchRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.launchRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -1179,12 +1294,39 @@ class SpaceMissionGame {
     dir.position.set(20, 30, 20);
     this.launchScene.add(dir);
 
-    const padGeo = new THREE.CylinderGeometry(6, 7, 1.5, 8);
-    const padMat = new THREE.MeshPhongMaterial({ color: 0x222a38, flatShading: true });
-    const pad = new THREE.Mesh(padGeo, padMat);
-    pad.position.y = -0.75;
-    this.launchScene.add(pad);
+    // Launch Pad Platform (Kenney)
+    this.launchPadPlatform = Assets.clone('platform_large', 'bottom');
+    if (this.launchPadPlatform) {
+      this.launchPadPlatform.scale.set(4.5, 3.0, 4.5);
+      this.launchPadPlatform.position.set(0, 0, 0);
+      this.launchScene.add(this.launchPadPlatform);
+    } else {
+      const padGeo = new THREE.CylinderGeometry(6, 7, 1.5, 8);
+      const padMat = new THREE.MeshPhongMaterial({ color: 0x222a38, flatShading: true });
+      const pad = new THREE.Mesh(padGeo, padMat);
+      pad.position.y = -0.75;
+      this.launchScene.add(pad);
+    }
 
+    // Spaceport Hangar in background (Kenney)
+    this.launchHangar = Assets.clone('hangar_largeA', 'bottom');
+    if (this.launchHangar) {
+      this.launchHangar.scale.set(3.5, 3.5, 3.5);
+      this.launchHangar.position.set(-13, 0, -8);
+      this.launchHangar.rotation.y = Math.PI / 4;
+      this.launchScene.add(this.launchHangar);
+    }
+
+    // Launch Facility Tracking Radar Dish (Kenney)
+    this.launchDish = Assets.clone('satelliteDish_detailed', 'bottom');
+    if (this.launchDish) {
+      this.launchDish.scale.set(1.5, 1.5, 1.5);
+      this.launchDish.position.set(10, 0, -5);
+      this.launchDish.rotation.y = -Math.PI / 3;
+      this.launchScene.add(this.launchDish);
+    }
+
+    // Umbilical service tower
     const towerGeo = new THREE.BoxGeometry(1.2, 14, 1.2);
     const towerMat = new THREE.MeshPhongMaterial({ color: 0xcc3322, flatShading: true });
     const tower = new THREE.Mesh(towerGeo, towerMat);
@@ -1214,6 +1356,53 @@ class SpaceMissionGame {
   createRocketModel() {
     const rocket = new THREE.Group();
 
+    // Assemble Kenney modular heavy rocket if assets are loaded
+    if (Assets.models['rocket_baseA']) {
+      const s = 1.6;
+      const rocketCore = new THREE.Group();
+
+      // 1. Rocket base with engine bells
+      const base = Assets.clone('rocket_baseA', 'bottom');
+      base.scale.set(s, s, s);
+      base.position.y = 0;
+      rocketCore.add(base);
+
+      let currentY = 1.6 * s;
+
+      // 2. Fuel tank core segments
+      for (let i = 0; i < 6; i++) {
+        const tank = Assets.clone('rocket_fuelA', 'bottom');
+        tank.scale.set(s, s, s);
+        tank.position.y = currentY;
+        rocketCore.add(tank);
+        currentY += 0.5 * s;
+      }
+
+      // 3. Payload nose cone fairing
+      const top = Assets.clone('rocket_topA', 'bottom');
+      top.scale.set(s, s, s);
+      top.position.y = currentY;
+      rocketCore.add(top);
+      currentY += 0.8 * s;
+
+      // 4. Heavy strap-on side boosters
+      for (let side of [-1, 1]) {
+        for (let b = 0; b < 3; b++) {
+          const booster = Assets.clone('rocket_sidesA', 'bottom');
+          booster.scale.set(s, s, s);
+          booster.position.set(side * 1.35, 0.4 + b * (1.0 * s), 0);
+          if (side < 0) booster.rotation.y = Math.PI;
+          rocketCore.add(booster);
+        }
+      }
+
+      // Center vertically around (0, 0, 0) like the procedural rocket
+      rocketCore.position.y = -currentY / 2;
+      rocket.add(rocketCore);
+      return rocket;
+    }
+
+    // Procedural fallback rocket
     const coreGeo = new THREE.CylinderGeometry(0.7, 0.7, 7, 10);
     const coreMat = new THREE.MeshPhongMaterial({ color: 0xeeeeff, flatShading: true });
     const core = new THREE.Mesh(coreGeo, coreMat);
@@ -1416,6 +1605,10 @@ class SpaceMissionGame {
     });
 
     this.currentScreen = screenName;
+
+    if (this.titleAstronaut) this.titleAstronaut.visible = (screenName === 'title');
+    if (this.earthMesh) this.earthMesh.visible = (screenName === 'title');
+    if (this.titleMoon) this.titleMoon.visible = (screenName === 'title');
 
     if (screenName === 'builder') {
       setTimeout(() => {
@@ -1921,9 +2114,14 @@ class SpaceMissionGame {
 
     if (this.earthMesh) this.mainScene.remove(this.earthMesh);
     if (this.titleMoon) this.mainScene.remove(this.titleMoon);
+    if (this.titleAstronaut) this.mainScene.remove(this.titleAstronaut);
     if (this.targetPlanetMesh) this.mainScene.remove(this.targetPlanetMesh);
     if (this.spacecraftMesh) this.mainScene.remove(this.spacecraftMesh);
     if (this.orbitCurveMesh) this.mainScene.remove(this.orbitCurveMesh);
+    if (this.asteroidDebris) {
+      this.asteroidDebris.forEach(a => this.mainScene.remove(a));
+      this.asteroidDebris = [];
+    }
 
     // Clear old waypoints
     this.surfaceWaypoints.forEach(wp => this.mainScene.remove(wp));
@@ -1936,6 +2134,20 @@ class SpaceMissionGame {
       this.targetPlanetMesh = createLowPolySun(m.radius);
     } else if (m.destination === 'Asteroid') {
       this.targetPlanetMesh = createLowPolyAsteroid(m.radius * 2.5);
+      // Spawn surrounding tumbling micro-asteroids from Kenney meteor models
+      for (let i = 0; i < 6; i++) {
+        const metKey = i % 2 === 0 ? 'meteor' : 'meteor_detailed';
+        const meteor = Assets.clone(metKey, 'center');
+        if (meteor) {
+          const dist = m.radius * 3.5 + Math.random() * 8;
+          const ang = (i / 6) * Math.PI * 2;
+          meteor.position.set(Math.cos(ang) * dist, (Math.random() - 0.5) * 4, Math.sin(ang) * dist);
+          const sc = 0.5 + Math.random() * 0.8;
+          meteor.scale.set(sc, sc, sc);
+          this.mainScene.add(meteor);
+          this.asteroidDebris.push(meteor);
+        }
+      }
     } else {
       this.targetPlanetMesh = createLowPolyPlanet(m.radius * 3.5, m.color, 2);
     }
@@ -1964,43 +2176,107 @@ class SpaceMissionGame {
 
   createSurfaceAnomalies(m) {
     const anomaliesData = [
-      { name: 'Water-Ice Shadowed Basin', sci: 65, color: 0x00e676, type: 'ice' },
-      { name: 'Rare-Metal Impact Crater', sci: 55, color: 0xffcc00, type: 'mineral' },
-      { name: 'Magnetic Field Anomaly', sci: 70, color: 0x3c96ff, type: 'magnetic' },
-      { name: 'Tectonic Fracture Canyon', sci: 50, color: 0xff6b35, type: 'geology' }
+      {
+        name: 'Water-Ice Shadowed Basin',
+        sci: 65,
+        color: 0x00e676,
+        type: 'ice',
+        modelKey: 'craterLarge',
+        scale: 1.6,
+        align: 'bottom'
+      },
+      {
+        name: 'Rare-Metal Mineral Vein',
+        sci: 55,
+        color: 0xffcc00,
+        type: 'mineral',
+        modelKey: 'rock_crystalsLargeA',
+        scale: 1.4,
+        align: 'bottom'
+      },
+      {
+        name: 'Magnetic Field Anomaly',
+        sci: 70,
+        color: 0x3c96ff,
+        type: 'magnetic',
+        modelKey: 'meteor_detailed',
+        scale: 1.3,
+        align: 'center'
+      },
+      {
+        name: 'Surface Surveyor Rover',
+        sci: 80,
+        color: 0xff6b35,
+        type: 'rover',
+        modelKey: 'rover',
+        scale: 2.0,
+        align: 'bottom'
+      },
+      {
+        name: 'Alien Signal Artifact',
+        sci: 95,
+        color: 0xb388ff,
+        type: 'relic',
+        modelKey: 'alien',
+        scale: 1.5,
+        align: 'bottom'
+      }
     ];
 
     const planetR = m.destination === 'Asteroid' ? m.radius * 2.5 : m.radius * 3.5;
 
     anomaliesData.forEach((anom, i) => {
-      const theta = (i / anomaliesData.length) * Math.PI * 2 + 0.3;
-      const phi = (i % 2 === 0 ? 0.4 : -0.4) + Math.PI / 2;
+      const theta = (i / anomaliesData.length) * Math.PI * 2 + 0.35;
+      const phi = ((i % 2 === 0 ? 0.35 : -0.35) * (1 + (i % 3) * 0.2)) + Math.PI / 2;
 
-      const x = (planetR + 0.6) * Math.sin(phi) * Math.cos(theta);
-      const y = (planetR + 0.6) * Math.cos(phi);
-      const z = (planetR + 0.6) * Math.sin(phi) * Math.sin(theta);
+      const norm = new THREE.Vector3(
+        Math.sin(phi) * Math.cos(theta),
+        Math.cos(phi),
+        Math.sin(phi) * Math.sin(theta)
+      ).normalize();
 
-      // Low-poly diamond beacon
-      const markerGeo = new THREE.OctahedronGeometry(0.35, 0);
-      const markerMat = new THREE.MeshBasicMaterial({
-        color: anom.color,
-        wireframe: true
-      });
-      const marker = new THREE.Mesh(markerGeo, markerMat);
-      marker.position.set(x, y, z);
+      const pos = norm.clone().multiplyScalar(planetR);
+
+      // Group marker
+      const marker = new THREE.Group();
+      marker.position.copy(pos);
+      marker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), norm);
       marker.userData = { anomaly: anom };
+      anom.marker = marker;
 
-      // Pulsing outer halo
-      const haloGeo = new THREE.RingGeometry(0.35, 0.55, 6);
+      // 3D Kenney model if available
+      const model = Assets.clone(anom.modelKey, anom.align);
+      if (model) {
+        model.scale.set(anom.scale, anom.scale, anom.scale);
+        model.traverse(node => {
+          node.userData = { anomaly: anom };
+        });
+        marker.add(model);
+      }
+
+      // Holographic targeting beacon / halo ring
+      const haloGeo = new THREE.RingGeometry(0.35, 0.65, 6);
       const haloMat = new THREE.MeshBasicMaterial({
         color: anom.color,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.6
+        opacity: 0.8
       });
       const halo = new THREE.Mesh(haloGeo, haloMat);
-      halo.lookAt(0, 0, 0);
+      halo.rotation.x = Math.PI / 2;
+      halo.position.y = 0.25;
       marker.add(halo);
+
+      // Low-poly floating diamond beacon at apex
+      const beaconGeo = new THREE.OctahedronGeometry(0.24, 0);
+      const beaconMat = new THREE.MeshBasicMaterial({
+        color: anom.color,
+        wireframe: true
+      });
+      const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+      beacon.position.y = 1.0;
+      beacon.userData = { isBeacon: true, anomaly: anom };
+      marker.add(beacon);
 
       this.mainScene.add(marker);
       this.surfaceWaypoints.push(marker);
@@ -2015,7 +2291,8 @@ class SpaceMissionGame {
     // Laser beam visualization from spacecraft to target
     if (this.spacecraftMesh) {
       const craftPos = this.spacecraftMesh.position.clone();
-      const points = [craftPos, new THREE.Vector3(0, 0, 0)];
+      const targetPos = (anom && anom.marker) ? anom.marker.position.clone() : new THREE.Vector3(0, 0, 0);
+      const points = [craftPos, targetPos];
       const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
       const lineMat = new THREE.LineBasicMaterial({ color: anom.color, linewidth: 2 });
       const beam = new THREE.Line(lineGeo, lineMat);
@@ -2286,6 +2563,18 @@ class SpaceMissionGame {
       // Title idle rotation
       if (this.earthMesh) this.earthMesh.rotation.y += 0.003;
       if (this.titleMoon) this.titleMoon.rotation.y += 0.002;
+      if (this.titleAstronaut && this.currentScreen === 'title') {
+        const t = Date.now() * 0.001;
+        this.titleAstronaut.rotation.y += 0.006;
+        this.titleAstronaut.rotation.z = Math.sin(t * 0.6) * 0.15;
+        this.titleAstronaut.position.y = 2.2 + Math.sin(t * 0.8) * 0.35;
+      }
+      if (this.asteroidDebris && this.asteroidDebris.length > 0) {
+        this.asteroidDebris.forEach((ast, idx) => {
+          ast.rotation.x += 0.005 * (idx + 1);
+          ast.rotation.y += 0.007 * (idx + 1);
+        });
+      }
 
       // Operations loop
       if (this.missionState.active && this.selectedMission) {
@@ -2360,10 +2649,11 @@ class SpaceMissionGame {
 
         // Pulse surface waypoint markers
         this.surfaceWaypoints.forEach((wp, idx) => {
-          wp.rotation.y += 0.02;
-          wp.rotation.x += 0.01;
-          const s = 1.0 + Math.sin(Date.now() * 0.004 + idx) * 0.15;
-          wp.scale.set(s, s, s);
+          const beacon = wp.children.find(c => c.userData && c.userData.isBeacon);
+          if (beacon) {
+            beacon.rotation.y += 0.03;
+            beacon.rotation.x += 0.015;
+          }
         });
 
         // Dynamic Camera Views
