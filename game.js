@@ -1254,6 +1254,11 @@ class MissionArchitectGame {
   }
 
   selectMission(m) {
+    if (typeof m === 'string') {
+      const found = MISSIONS.find(x => x.id === m || x.id.includes(m) || x.destination.toLowerCase().includes(m.toLowerCase()) || x.name.toLowerCase().includes(m.toLowerCase()));
+      if (found) m = found;
+    }
+    if (!m || typeof m !== 'object') m = MISSIONS[0];
     this.selectedMission = m;
     this.renderMissionsGrid();
     this.updateBriefingCard();
@@ -1261,7 +1266,8 @@ class MissionArchitectGame {
   }
 
   updateBriefingCard() {
-    const m = this.selectedMission;
+    const m = this.selectedMission || MISSIONS[0];
+    if (!m) return;
     const hl = document.getElementById('briefing-headline');
     const desc = document.getElementById('briefing-desc');
     const mass = document.getElementById('b-mass');
@@ -1269,12 +1275,32 @@ class MissionArchitectGame {
     const power = document.getElementById('b-power');
     const comms = document.getElementById('b-comms');
 
-    if (hl) hl.textContent = m.name.toUpperCase();
-    if (desc) desc.textContent = m.detailedBrief;
-    if (mass) mass.textContent = `${m.maxMassKg.toLocaleString()} kg`;
-    if (deltav) deltav.textContent = `${m.minDeltav.toLocaleString()} m/s`;
+    if (hl) hl.textContent = (m.name || 'MISSION').toUpperCase();
+    if (desc) desc.textContent = m.detailedBrief || m.desc || '';
+    if (mass) mass.textContent = `${(m.maxMassKg || 0).toLocaleString()} kg`;
+    if (deltav) deltav.textContent = `${(m.minDeltav || 0).toLocaleString()} m/s`;
     if (power) power.textContent = 'Net ≥ 0 W';
-    if (comms) comms.textContent = `≥ ${m.minComms}% Link`;
+    if (comms) comms.textContent = `≥ ${m.minComms || 0}% Link`;
+  }
+
+  selectCategory(catId) {
+    if (catId === 'science') catId = 'payload';
+    this.selectedCategory = catId;
+    this.renderCategoryTabs();
+    this.renderComponents();
+    if (this.sound) this.sound.playBeep(520, 0.04);
+  }
+
+  switchCategory(catId) {
+    this.selectCategory(catId);
+  }
+
+  selectComponent(catOrId, id) {
+    const targetId = id || catOrId;
+    const comp = COMPONENTS.find(c => c.id === targetId || c.id.includes(targetId) || c.name.toLowerCase().includes(targetId.toLowerCase()));
+    if (comp) {
+      this.toggleComponent(comp);
+    }
   }
 
   // ─────────────────────────────────────────────────────
@@ -1367,13 +1393,29 @@ class MissionArchitectGame {
     this.sound.playChime();
   }
 
+  skipIntro() {
+    this.skipCinematic();
+  }
+
   acceptMission() {
     this.sound.playBeep(880, 0.1);
     this.goTo('builder');
   }
 
+  acceptBriefing() {
+    this.acceptMission();
+  }
+
   goToValidation() {
     this.goTo('validation');
+  }
+
+  proceedToValidation() {
+    this.goToValidation();
+  }
+
+  startLaunchSequence() {
+    this.executeLaunchSequence();
   }
 
   // ─────────────────────────────────────────────────────
@@ -1523,11 +1565,12 @@ class MissionArchitectGame {
   // ─────────────────────────────────────────────────────
 
   startFlightSimulation() {
+    if (!this.selectedMission) this.selectedMission = MISSIONS[0];
     const m = this.selectedMission;
 
     // Reset flight values
     this.flight.burning = 0;
-    this.flight.currentOrbitR = m.orbitRadius;
+    this.flight.currentOrbitR = m.orbitRadius || 13.0;
     this.flight.orbitAngle = 0;
     this.flight.speedKms = 1.62;
     this.flight.altKm = 120;
@@ -1541,9 +1584,9 @@ class MissionArchitectGame {
     const chTag = document.getElementById('ops-chapter-tag');
     const nameEl = document.getElementById('ops-mission-name');
     const objEl = document.getElementById('ops-objective-text');
-    if (chTag) chTag.textContent = m.chapter;
-    if (nameEl) nameEl.textContent = m.name.toUpperCase();
-    if (objEl) objEl.textContent = `Target: Deliver equipment to ${m.targetStation}`;
+    if (chTag) chTag.textContent = m.chapter || 'CHAPTER 01';
+    if (nameEl) nameEl.textContent = (m.name || 'ORBITAL FLIGHT').toUpperCase();
+    if (objEl) objEl.textContent = `Target: Deliver equipment to ${m.targetStation || 'Surface Station'}`;
 
     // Clean old objects in mainScene
     if (this.targetPlanetMesh) this.mainScene.remove(this.targetPlanetMesh);
@@ -1569,20 +1612,29 @@ class MissionArchitectGame {
 
     // 2. Surface Base Station Alpha (on Moon/Mars)
     const baseModelKey = m.id === 'mars_explorer' ? 'Building_L' : 'GeodesicDome';
-    const station = Assets.clone(baseModelKey, 'bottom') || Assets.clone('Base_Large', 'bottom');
-    if (station) {
-      station.scale.set(0.6, 0.6, 0.6);
-      station.position.set(0, 4.3, 0); // Positioned at top pole of target
-      station.userData = { isStation: true, name: m.targetStation };
-      this.targetStationMesh = station;
-      this.mainScene.add(this.targetStationMesh);
+    let station = Assets.clone(baseModelKey, 'bottom') || Assets.clone('Base_Large', 'bottom');
+    if (!station) {
+      const g = new THREE.CylinderGeometry(0.5, 0.6, 0.4, 8);
+      const mat = new THREE.MeshStandardMaterial({ color: 0x4488ff, metalness: 0.8, roughness: 0.2 });
+      station = new THREE.Mesh(g, mat);
     }
+    station.scale.set(0.6, 0.6, 0.6);
+    station.position.set(0, 4.3, 0); // Positioned at top pole of target
+    station.traverse(child => {
+      child.userData = { isStation: true, name: m.targetStation };
+    });
+    station.userData = { isStation: true, name: m.targetStation };
+    this.targetStationMesh = station;
+    this.mainScene.add(this.targetStationMesh);
 
     // 3. Surface Rover
     const rover = Assets.clone('Rover_1', 'bottom') || Assets.clone('rover', 'bottom');
     if (rover) {
       rover.scale.set(0.28, 0.28, 0.28);
       rover.position.set(1.5, 4.25, 0.8);
+      rover.traverse(child => {
+        child.userData = { isRover: true, name: 'Planetary Rover Alpha' };
+      });
       rover.userData = { isRover: true, name: 'Planetary Rover Alpha' };
       this.targetRoverMesh = rover;
       this.mainScene.add(this.targetRoverMesh);
@@ -1768,6 +1820,11 @@ class MissionArchitectGame {
         }
       }
     });
+  }
+
+  deliverPayload(stationName) {
+    const target = stationName || (this.selectedMission && this.selectedMission.targetStation) || 'Station Alpha';
+    this.deliverPayloadToStation(target);
   }
 
   deliverPayloadToStation(stationName) {
