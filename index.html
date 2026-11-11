@@ -71,10 +71,13 @@
       transition: opacity 0.3s ease;
     }
 
-    .screen.hidden {
+    .hidden,
+    .screen.hidden,
+    .modal-overlay.hidden {
       display: none !important;
       opacity: 0 !important;
       pointer-events: none !important;
+      visibility: hidden !important;
     }
 
     /* Generic UI Buttons */
@@ -1094,6 +1097,14 @@
       align-items: center;
       justify-content: center;
       padding: 24px;
+      pointer-events: auto;
+    }
+
+    .modal-overlay.hidden {
+      display: none !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      visibility: hidden !important;
     }
 
     .modal-box {
@@ -1628,10 +1639,15 @@
   <!-- ═══════════════════════════════════════════════════
        MODAL: TRAINING ACADEMY (FLIGHT CONTROLS & MANUAL)
   ═══════════════════════════════════════════════════ -->
-  <div class="modal-overlay hidden" id="training-modal" onclick="Game.toggleTrainingModal()">
+  <div class="modal-overlay hidden" id="training-modal" onclick="Game.toggleTrainingModal(false)">
     <div class="modal-box" onclick="event.stopPropagation()">
-      <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--accent);letter-spacing:0.15em;">TRAINING ACADEMY MANUAL</div>
-      <h3 style="color:#fff;font-size:1.4rem;font-weight:800;">FLIGHT CONTROLS & ARCHITECTURE RULES</h3>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--accent);letter-spacing:0.15em;">TRAINING ACADEMY MANUAL</div>
+          <h3 style="color:#fff;font-size:1.4rem;font-weight:800;margin-top:4px;">FLIGHT CONTROLS & ARCHITECTURE RULES</h3>
+        </div>
+        <button class="btn" id="btn-close-training" onclick="Game.toggleTrainingModal(false)" style="padding:6px 12px;font-size:1.2rem;line-height:1;min-width:36px;" title="Close">✕</button>
+      </div>
       <div style="display:grid;grid-template-columns:140px 1fr;gap:12px;font-size:0.82rem;line-height:1.5;">
         <div><strong>W / S</strong></div><div>Pitch Attitude — Nose down / Nose up</div>
         <div><strong>A / D</strong></div><div>Yaw Attitude — Turn left / Turn right</div>
@@ -1643,17 +1659,22 @@
         <div><strong>[ / ]</strong></div><div>Time Warp: 1x, 5x, 25x acceleration</div>
         <div><strong>CLICK TARGET</strong></div><div>Target Surface Station / Rover to initiate science delivery & data downlink</div>
       </div>
-      <button class="btn primary" onclick="Game.toggleTrainingModal()" style="align-self:flex-end;">DISMISS MANUAL</button>
+      <button class="btn primary" id="btn-dismiss-training" onclick="Game.toggleTrainingModal(false)" style="align-self:flex-end;">DISMISS MANUAL</button>
     </div>
   </div>
 
   <!-- ═══════════════════════════════════════════════════
        MODAL: ABOUT & NASA DATA SOURCES
   ═══════════════════════════════════════════════════ -->
-  <div class="modal-overlay hidden" id="nasa-sources-modal" onclick="Game.toggleNasaModal()">
+  <div class="modal-overlay hidden" id="nasa-sources-modal" onclick="Game.toggleNasaModal(false)">
     <div class="modal-box" onclick="event.stopPropagation()">
-      <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--accent);letter-spacing:0.15em;">NASA SCIENTIFIC CITATIONS</div>
-      <h3 style="color:#fff;font-size:1.4rem;font-weight:800;">NASA DATA SOURCES & RESEARCH INTEGRATION</h3>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--accent);letter-spacing:0.15em;">NASA SCIENTIFIC CITATIONS</div>
+          <h3 style="color:#fff;font-size:1.4rem;font-weight:800;margin-top:4px;">NASA DATA SOURCES & RESEARCH INTEGRATION</h3>
+        </div>
+        <button class="btn" id="btn-close-nasa" onclick="Game.toggleNasaModal(false)" style="padding:6px 12px;font-size:1.2rem;line-height:1;min-width:36px;" title="Close">✕</button>
+      </div>
       <div style="font-size:0.85rem;color:var(--text-dim);line-height:1.6;display:flex;flex-direction:column;gap:14px;">
         <div>
           <strong style="color:#fff;">1. NASA JPL Horizons System</strong>
@@ -1672,17 +1693,22 @@
           <br/>Spacecraft geometry concepts and lunar landing architecture references from Artemis and Apollo programs.
         </div>
       </div>
-      <button class="btn primary" onclick="Game.toggleNasaModal()" style="align-self:flex-end;">CLOSE CITATIONS</button>
+      <button class="btn primary" id="btn-close-nasa-bottom" onclick="Game.toggleNasaModal(false)" style="align-self:flex-end;">CLOSE CITATIONS</button>
     </div>
   </div>
 
   <!-- ═══════════════════════════════════════════════════
        MODAL: SETTINGS
   ═══════════════════════════════════════════════════ -->
-  <div class="modal-overlay hidden" id="settings-modal" onclick="Game.toggleSettingsModal()">
+  <div class="modal-overlay hidden" id="settings-modal" onclick="Game.toggleSettingsModal(false)">
     <div class="modal-box" onclick="event.stopPropagation()">
-      <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--accent);letter-spacing:0.15em;">CONFIGURATION</div>
-      <h3 style="color:#fff;font-size:1.4rem;font-weight:800;">AUDIO & GRAPHICS SETTINGS</h3>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--accent);letter-spacing:0.15em;">CONFIGURATION</div>
+          <h3 style="color:#fff;font-size:1.4rem;font-weight:800;margin-top:4px;">AUDIO & GRAPHICS SETTINGS</h3>
+        </div>
+        <button class="btn" id="btn-close-settings-x" onclick="Game.toggleSettingsModal(false)" style="padding:6px 12px;font-size:1.2rem;line-height:1;min-width:36px;" title="Close">✕</button>
+      </div>
       <div style="display:flex;flex-direction:column;gap:14px;font-size:0.85rem;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <span>AUDIO SOUND EFFECTS (SFX)</span>
@@ -1697,7 +1723,7 @@
           <button class="btn" onclick="document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()">TOGGLE FULLSCREEN</button>
         </div>
       </div>
-      <button class="btn primary" onclick="Game.toggleSettingsModal()" style="align-self:flex-end;">SAVE & CLOSE</button>
+      <button class="btn primary" id="btn-save-settings" onclick="Game.toggleSettingsModal(false)" style="align-self:flex-end;">SAVE & CLOSE</button>
     </div>
   </div>
 

@@ -1680,6 +1680,12 @@ class MissionArchitectGame {
       if (e.code === 'KeyF') {
         this.toggleSAS();
       }
+      if (e.code === 'Escape') {
+        this.closeAllModals();
+      }
+      if (e.code === 'KeyH') {
+        this.toggleTrainingModal();
+      }
       if (e.code === 'Digit1') this.setCameraMode('orbit');
       if (e.code === 'Digit2') this.setCameraMode('chase');
       if (e.code === 'Digit3') this.setCameraMode('cockpit');
@@ -1849,22 +1855,34 @@ class MissionArchitectGame {
   // MODAL HANDLERS
   // ─────────────────────────────────────────────────────
 
-  toggleTrainingModal() {
+  toggleTrainingModal(force) {
     const m = document.getElementById('training-modal');
-    if (m) m.classList.toggle('hidden');
-    this.sound.playBeep(450, 0.04);
+    if (!m) return;
+    const shouldHide = typeof force === 'boolean' ? !force : !m.classList.contains('hidden');
+    m.classList.toggle('hidden', shouldHide);
+    if (this.sound) this.sound.playBeep(450, 0.04);
   }
 
-  toggleNasaModal() {
+  toggleNasaModal(force) {
     const m = document.getElementById('nasa-sources-modal');
-    if (m) m.classList.toggle('hidden');
-    this.sound.playBeep(450, 0.04);
+    if (!m) return;
+    const shouldHide = typeof force === 'boolean' ? !force : !m.classList.contains('hidden');
+    m.classList.toggle('hidden', shouldHide);
+    if (this.sound) this.sound.playBeep(450, 0.04);
   }
 
-  toggleSettingsModal() {
+  toggleSettingsModal(force) {
     const m = document.getElementById('settings-modal');
-    if (m) m.classList.toggle('hidden');
-    this.sound.playBeep(450, 0.04);
+    if (!m) return;
+    const shouldHide = typeof force === 'boolean' ? !force : !m.classList.contains('hidden');
+    m.classList.toggle('hidden', shouldHide);
+    if (this.sound) this.sound.playBeep(450, 0.04);
+  }
+
+  closeAllModals() {
+    this.toggleSettingsModal(false);
+    this.toggleTrainingModal(false);
+    this.toggleNasaModal(false);
   }
 
   toggleAudio() {
