@@ -11,6 +11,7 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.svg': 'image/svg+xml',
+  '.md': 'text/markdown; charset=utf-8',
   '.glb': 'model/gltf-binary',
   '.gltf': 'model/gltf+json'
 };
